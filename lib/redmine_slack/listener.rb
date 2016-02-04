@@ -70,11 +70,16 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 		return if issue.is_private?
 
 		# Notify only if some properties updated
+		# or if there's notes
 		if original_issue
 			keys = [:assigned_to_id, :priority_id, :status_id]
-			return unless keys.map { |k|
+			changes = keys.map { |k|
 				original_issue[k] == issue[k]
 			}.include?(false)
+
+			if !changes && journal.notes.blank?
+				return nil
+			end
 		end
 
 		msg = RedmineSlack::Payload::Message.new(
