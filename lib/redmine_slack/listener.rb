@@ -6,8 +6,12 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 	def controller_issues_new_after_save(context={})
 		issue = context[:issue]
 
-		channel = channel_for_project issue.project
-		url = url_for_project issue.project
+		channel = RedmineSlack::Payload::Channel.for_project(
+			issue.project
+		)
+		url = RedmineSlack::Payload::Url.for_project(
+			issue.project
+		)
 
 		return unless channel and url
 		return if issue.is_private?
@@ -54,8 +58,12 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 		issue = context[:issue]
 		journal = context[:journal]
 
-		channel = channel_for_project issue.project
-		url = url_for_project issue.project
+		channel = RedmineSlack::Payload::Channel.for_project(
+			issue.project
+		)
+		url = RedmineSlack::Payload::Url.for_project(
+			issue.project
+		)
 		original_issue = context[:params][:original_issue]
 
 		return unless channel and url and Setting.plugin_redmine_slack[:post_updates] == '1'
@@ -93,8 +101,12 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 		issue = context[:issue]
 		journal = issue.journals.last
 
-		channel = channel_for_project issue.project
-		url = url_for_project issue.project
+		channel = RedmineSlack::Payload::Channel.for_project(
+			issue.project
+		)
+		url = RedmineSlack::Payload::Url.for_project(
+			issue.project
+		)
 		original_issue = context[:params][:original_issue]
 
 		return unless channel and url and Setting.plugin_redmine_slack[:post_updates] == '1'
@@ -126,8 +138,12 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 		journal = issue.current_journal
 		changeset = context[:changeset]
 
-		channel = channel_for_project issue.project
-		url = url_for_project issue.project
+		channel = RedmineSlack::Payload::Channel.for_project(
+			issue.project
+		)
+		url = RedmineSlack::Payload::Url.for_project(
+			issue.project
+		)
 
 		return unless channel and url and issue.save
 		return if issue.is_private?
@@ -174,35 +190,5 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 			username: username,
 			attachment: attachment
 		).speak_async
-	end
-
-private
-
-	def url_for_project(proj)
-		return nil if proj.blank?
-
-		cf = ProjectCustomField.find_by_name("Slack URL")
-
-		return [
-			(proj.custom_value_for(cf).value rescue nil),
-			(url_for_project proj.parent),
-			Setting.plugin_redmine_slack[:slack_url],
-		].find{|v| v.present?}
-	end
-
-	def channel_for_project(proj)
-		return nil if proj.blank?
-
-		cf = ProjectCustomField.find_by_name("Slack Channel")
-
-		val = [
-			(proj.custom_value_for(cf).value rescue nil),
-			(channel_for_project proj.parent),
-			Setting.plugin_redmine_slack[:channel],
-		].find{|v| v.present?}
-
-		# Channel name '-' is reserved for NOT notifying
-		return nil if val.to_s == '-'
-		val
 	end
 end
