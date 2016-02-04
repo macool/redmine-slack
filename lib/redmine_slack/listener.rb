@@ -1,9 +1,7 @@
 require 'httpclient'
 
 class RedmineSlack::Listener < Redmine::Hook::Listener
-	include ERB::Util
 	include RedmineSlack::Utils
-	include GravatarHelper::PublicMethods
 
 	def controller_issues_new_after_save(context={})
 		issue = context[:issue]
@@ -19,12 +17,11 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 			notes: issue.description
 		).msg
 
-		gravatar = gravatar_url(issue.author.mail, size: 32)
+		attachment = RedmineSlack::Payload::Attachment.new(
+			user: issue.author,
+			notes: issue.description
+		).attachment
 
-		attachment = {}
-		attachment[:author_name] = escape issue.author
-		attachment[:author_icon] = gravatar unless gravatar.nil? || gravatar.empty?
-		attachment[:text] = escape issue.description if issue.description
 		attachment[:fields] = [{
 			:title => I18n.t("field_status"),
 			:value => escape(issue.status.to_s),
@@ -72,18 +69,16 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 			}.include?(false)
 		end
 
-		gravatar = gravatar_url(journal.user.mail, size: 32)
-
-		attachment = {}
-		attachment[:author_name] = escape(journal.user.to_s)
-		attachment[:author_icon] = gravatar unless gravatar.nil? || gravatar.empty?
-		attachment[:text] = escape journal.notes if journal.notes
-		attachment[:fields] = journal.details.map { |d| detail_to_field d }
-
 		msg = RedmineSlack::Payload::Message.new(
 			issue: issue,
 			notes: journal.notes
 		).msg
+
+		attachment = RedmineSlack::Payload::Attachment.new(
+			user: journal.user,
+			notes: journal.notes,
+			details: journal.details
+		).attachment
 
 		speak msg, channel, attachment, url
 	end
@@ -117,13 +112,11 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 			notes: journal.notes
 		).msg
 
-		gravatar = gravatar_url(journal.user.mail, size: 32)
-
-		attachment = {}
-		attachment[:author_name] = escape(journal.user.to_s)
-		attachment[:author_icon] = gravatar unless gravatar.nil? || gravatar.empty?
-		attachment[:text] = escape journal.notes if journal.notes
-		attachment[:fields] = journal.details.map { |d| detail_to_field d }
+		attachment = RedmineSlack::Payload::Attachment.new(
+			user: journal.user,
+			notes: journal.notes,
+			details: journal.details
+		).attachment
 
 		speak msg, channel, attachment, url
 	end
@@ -155,9 +148,15 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 			:protocol => Setting.protocol
 		)
 
-		attachment = {}
-		attachment[:text] = ll(Setting.default_language, :text_status_changed_by_changeset, "<#{revision_url}|#{escape changeset.comments}>")
-		attachment[:fields] = journal.details.map { |d| detail_to_field d }
+		attachment = RedmineSlack::Payload::Attachment.new(
+			user: journal.user,
+			details: journal.details,
+			text: ll(
+				Setting.default_language,
+				:text_status_changed_by_changeset,
+				"<#{revision_url}|#{escape changeset.comments}>"
+			)
+		).attachment
 
 		speak msg, channel, attachment, url
 	end
@@ -205,59 +204,5 @@ private
 		# Channel name '-' is reserved for NOT notifying
 		return nil if val.to_s == '-'
 		val
-	end
-
-	def detail_to_field(detail)
-		if detail.property == "cf"
-			key = CustomField.find(detail.prop_key).name rescue nil
-			title = key
-		elsif detail.property == "attachment"
-			key = "attachment"
-			title = I18n.t :label_attachment
-		else
-			key = detail.prop_key.to_s.sub("_id", "")
-			title = I18n.t "field_#{key}"
-		end
-
-		short = true
-		value = escape detail.value.to_s
-
-		case key
-		when "title", "subject", "description"
-			short = false
-		when "tracker"
-			tracker = Tracker.find(detail.value) rescue nil
-			value = escape tracker.to_s
-		when "project"
-			project = Project.find(detail.value) rescue nil
-			value = escape project.to_s
-		when "status"
-			status = IssueStatus.find(detail.value) rescue nil
-			value = escape status.to_s
-		when "priority"
-			priority = IssuePriority.find(detail.value) rescue nil
-			value = escape priority.to_s
-		when "category"
-			category = IssueCategory.find(detail.value) rescue nil
-			value = escape category.to_s
-		when "assigned_to"
-			user = User.find(detail.value) rescue nil
-			value = escape user.to_s
-		when "fixed_version"
-			version = Version.find(detail.value) rescue nil
-			value = escape version.to_s
-		when "attachment"
-			attachment = Attachment.find(detail.prop_key) rescue nil
-			value = "<#{object_url attachment}|#{escape attachment.filename}>" if attachment
-		when "parent"
-			issue = Issue.find(detail.value) rescue nil
-			value = "<#{object_url issue}|#{escape issue}>" if issue
-		end
-
-		value = "-" if value.empty?
-
-		result = { :title => title, :value => value }
-		result[:short] = true if short
-		result
 	end
 end
