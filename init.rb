@@ -4,8 +4,8 @@ require_dependency 'redmine_slack'
 
 Redmine::Plugin.register :redmine_slack do
 	name 'Redmine Slack'
-	author 'Samuel Cormier-Iijima'
-	url 'https://github.com/sciyoshi/redmine-slack'
+	author 'Samuel Cormier-Iijima / macool'
+	url 'https://github.com/macool/redmine-slack'
 	author_url 'http://www.sciyoshi.com'
 	description 'Slack chat integration'
 	version '0.1'
