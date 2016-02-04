@@ -1,6 +1,6 @@
 require 'httpclient'
 
-class SlackListener < Redmine::Hook::Listener
+class RedmineSlack::Listener < Redmine::Hook::Listener
 	include ERB::Util
 	include GravatarHelper::PublicMethods
 
@@ -152,35 +152,17 @@ class SlackListener < Redmine::Hook::Listener
 
 	def speak(msg, channel, attachment=nil, url=nil)
 		url = Setting.plugin_redmine_slack[:slack_url] if not url
-		username = Setting.plugin_redmine_slack[:username]
 		icon = Setting.plugin_redmine_slack[:icon]
+		username = Setting.plugin_redmine_slack[:username]
 
-		params = {
-			:text => msg,
-			:link_names => 1,
-		}
-
-		params[:username] = username if username
-		params[:channel] = channel if channel
-
-		params[:attachments] = [attachment] if attachment
-
-		if icon and not icon.empty?
-			if icon.start_with? ':'
-				params[:icon_emoji] = icon
-			else
-				params[:icon_url] = icon
-			end
-		end
-
-		begin
-			client = HTTPClient.new
-			client.ssl_config.cert_store.set_default_paths
-			client.ssl_config.ssl_version = "SSLv23"
-			client.post_async url, {:payload => params.to_json}
-		rescue
-			# Bury exception if connection error
-		end
+		RedmineSlack::Speaker.new(
+			url: url,
+			msg: msg,
+			icon: icon,
+			channel: channel,
+			username: username,
+			attachment: attachment
+		).speak_async
 	end
 
 private
