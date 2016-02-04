@@ -2,6 +2,7 @@ require 'httpclient'
 
 class RedmineSlack::Listener < Redmine::Hook::Listener
 	include ERB::Util
+	include RedmineSlack::Utils
 	include GravatarHelper::PublicMethods
 
 	def controller_issues_new_after_save(context={})
@@ -13,7 +14,10 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 		return unless channel and url
 		return if issue.is_private?
 
-		msg = "[#{escape issue.project}] <#{object_url issue}|#{escape issue}>#{mentions issue.description}"
+		msg = RedmineSlack::Payload::Message.new(
+			issue: issue,
+			notes: issue.description
+		).msg
 
 		gravatar = gravatar_url(issue.author.mail, size: 32)
 
@@ -68,8 +72,6 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 			}.include?(false)
 		end
 
-		msg = "[#{escape issue.project}] <#{object_url issue}|#{escape issue}>#{mentions journal.notes}"
-
 		gravatar = gravatar_url(journal.user.mail, size: 32)
 
 		attachment = {}
@@ -77,6 +79,11 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 		attachment[:author_icon] = gravatar unless gravatar.nil? || gravatar.empty?
 		attachment[:text] = escape journal.notes if journal.notes
 		attachment[:fields] = journal.details.map { |d| detail_to_field d }
+
+		msg = RedmineSlack::Payload::Message.new(
+			issue: issue,
+			notes: journal.notes
+		).msg
 
 		speak msg, channel, attachment, url
 	end
@@ -105,7 +112,10 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 			}.include?(false)
 		end
 
-		msg = "[#{escape issue.project}] <#{object_url issue}|#{escape issue}>#{mentions journal.notes}"
+		msg = RedmineSlack::Payload::Message.new(
+			issue: issue,
+			notes: journal.notes
+		).msg
 
 		gravatar = gravatar_url(journal.user.mail, size: 32)
 
@@ -129,7 +139,9 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 		return unless channel and url and issue.save
 		return if issue.is_private?
 
-		msg = "[#{escape issue.project}] #{escape journal.user.to_s} updated <#{object_url issue}|#{escape issue}>"
+		msg = RedmineSlack::Payload::Message.new(
+			issue: issue
+		).msg
 
 		repository = changeset.repository
 
@@ -166,13 +178,6 @@ class RedmineSlack::Listener < Redmine::Hook::Listener
 	end
 
 private
-	def escape(msg)
-		msg.to_s.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
-	end
-
-	def object_url(obj)
-		Rails.application.routes.url_for(obj.event_url({:host => Setting.host_name, :protocol => Setting.protocol}))
-	end
 
 	def url_for_project(proj)
 		return nil if proj.blank?
@@ -254,16 +259,5 @@ private
 		result = { :title => title, :value => value }
 		result[:short] = true if short
 		result
-	end
-
-	def mentions text
-		names = extract_usernames text
-		names.present? ? "\nTo: " + names.join(', ') : nil
-	end
-
-	def extract_usernames text = ''
-		# slack usernames may only contain lowercase letters, numbers,
-		# dashes and underscores and must start with a letter or number.
-		text.scan(/@[a-z0-9][a-z0-9_\-]*/).uniq
 	end
 end
